@@ -24,7 +24,7 @@ EXPENSE_CATS = [
     ("其他", "#64748b"),
 ]
 INCOME_CATS = [
-    ("工资", "#16a34a"), ("奖金", "#22c55e"), ("理财", "#0ea5e9"),
+    ("工资", "#16a34a"), ("奖金", "#22c55e"), ("理财", "#0ea5e9"),("生活费", "#2be90e"),
     ("红包", "#f43f5e"), ("其他", "#64748b"),
 ]
 CAT_COLORS = {}          # 分类名 -> 颜色
@@ -106,15 +106,41 @@ class RoundedButton(tk.Canvas):
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("我的记账本")
-        self.root.geometry("1040x840")
+        self.root.title("记账本")
         self.root.configure(bg=BG)
+        self.fit_to_screen()
 
         self.records = self.load_data()
         self.current_month = datetime.date.today().strftime("%Y-%m")  # 例如 "2026-10"
 
         self.build_ui()
         self.refresh()
+
+    def fit_to_screen(self):
+        """按屏幕大小调整窗口，保证不超出屏幕，并居中显示。"""
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        w = min(1040, sw - 60)
+        h = min(820, sh - 120)
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 3)
+        self.root.minsize(760, 560)
+        self.root.geometry("{}x{}+{}+{}".format(w, h, x, y))
+
+    def _on_content_config(self, e):
+        bbox = self.canvas.bbox("all")
+        if bbox:
+            self.canvas.configure(scrollregion=bbox)
+
+    def _on_canvas_config(self, e):
+        self.canvas.itemconfigure(self.content_id, width=e.width)
+
+    def _on_wheel(self, e):
+        self.canvas.yview_scroll(int(-e.delta / 120), "units")
+
+    def _tree_wheel(self, e):
+        self.tree.yview_scroll(int(-e.delta / 120), "units")
+        return "break"
 
     # ---------- 数据存取 ----------
     def load_data(self):
@@ -135,8 +161,24 @@ class App:
 
     # ---------- 界面搭建 ----------
     def build_ui(self):
+        # 滚动容器：内容可以上下滚动，窗口再小也不会被截断
+        container = tk.Frame(self.root, bg=BG)
+        container.pack(fill="both", expand=True)
+
+        self.canvas = tk.Canvas(container, bg=BG, highlightthickness=0)
+        vbar = ttk.Scrollbar(container, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=vbar.set)
+        vbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.content = tk.Frame(self.canvas, bg=BG)
+        self.content_id = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
+        self.content.bind("<Configure>", self._on_content_config)
+        self.canvas.bind("<Configure>", self._on_canvas_config)
+        self.canvas.bind_all("<MouseWheel>", self._on_wheel)
+
         # 顶部：标题 + 月份切换
-        top = tk.Frame(self.root, bg=BG)
+        top = tk.Frame(self.content, bg=BG)
         top.pack(fill="x", padx=16, pady=(16, 10))
 
         tk.Label(top, text="📒 我的记账本", bg=BG, fg="#1f2937",
@@ -156,8 +198,8 @@ class App:
         nav_btn("回到本月", self.goto_today).pack(side="left", padx=3)
 
         # 记账 + 明细（放在顶部）
-        top_main = tk.Frame(self.root, bg=BG)
-        top_main.pack(fill="both", expand=True, padx=16, pady=6)
+        top_main = tk.Frame(self.content, bg=BG)
+        top_main.pack(fill="x", padx=16, pady=6)
 
         form_card = tk.Frame(top_main, bg=CARD_BG, highlightbackground="#e5e7eb",
                              highlightthickness=1)
@@ -170,14 +212,14 @@ class App:
         self.build_records(rec_card)
 
         # 汇总卡片
-        summary = tk.Frame(self.root, bg=BG)
+        summary = tk.Frame(self.content, bg=BG)
         summary.pack(fill="x", padx=16, pady=6)
         self.sum_income = self.make_card(summary, "本月收入", INCOME_COLOR)
         self.sum_expense = self.make_card(summary, "本月支出", EXPENSE_COLOR)
         self.sum_balance = self.make_card(summary, "本月结余", INCOME_COLOR)
 
         # 图表区（左：饼图，右：柱状图）
-        charts = tk.Frame(self.root, bg=BG)
+        charts = tk.Frame(self.content, bg=BG)
         charts.pack(fill="x", padx=16, pady=(6, 16))
 
         pie_card = tk.Frame(charts, bg=CARD_BG, highlightbackground="#e5e7eb",
@@ -277,6 +319,7 @@ class App:
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side="left", fill="both", expand=True, padx=(14, 0), pady=(0, 14))
         scroll.pack(side="left", fill="y", pady=(0, 14))
+        self.tree.bind("<MouseWheel>", self._tree_wheel)
 
     # ---------- 分类下拉框 ----------
     def update_cats(self):
