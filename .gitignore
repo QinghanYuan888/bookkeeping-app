@@ -1,0 +1,15 @@
+# 运行时数据（个人账单，不纳入版本管理）
+账单数据.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 编辑器/系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
